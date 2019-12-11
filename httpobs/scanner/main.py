@@ -2,6 +2,9 @@ from random import randrange
 from time import sleep
 from urllib.parse import parse_qs, urlparse
 
+from flask import Flask, Blueprint, jsonify
+from httpobs.website import add_response_headers
+
 from httpobs.conf import (BROKER_URL,
                           SCANNER_ALLOW_KICKSTART,
                           SCANNER_ALLOW_KICKSTART_NUM_ABORTED,
@@ -11,7 +14,10 @@ from httpobs.conf import (BROKER_URL,
                           SCANNER_MAINTENANCE_CYCLE_FREQUENCY,
                           SCANNER_MATERIALIZED_VIEW_REFRESH_FREQUENCY,
                           SCANNER_MAX_CPU_UTILIZATION,
-                          SCANNER_MAX_LOAD)
+                          SCANNER_MAX_LOAD,
+                          DEVELOPMENT_MODE,
+                          API_PORT,
+                          API_PROPAGATE_EXCEPTIONS)
 from httpobs.database import (periodic_maintenance,
                               refresh_materialized_views,
                               update_scans_dequeue_scans)
@@ -24,7 +30,7 @@ import subprocess
 import sys
 
 
-def main():
+def init():
     # Start each scanner at a random point in the range to spread out database maintenance
     dequeue_loop_count = randrange(0, SCANNER_MAINTENANCE_CYCLE_FREQUENCY)
     materialized_view_loop_count = randrange(0, SCANNER_MATERIALIZED_VIEW_REFRESH_FREQUENCY)
@@ -38,6 +44,12 @@ def main():
 
     # Get the current CPU utilization and wait a second to begin the loop for the next reading
     psutil.cpu_percent()
+
+    # TODO: COMMENT ADDED HERE
+    print('[{time}] INFO: Sleeping to wait a second to begin the loop for the next reading'.format(
+        time=str(datetime.datetime.now()).split('.')[0]),
+        file=sys.stdout)
+
     sleep(1)
 
     while True:
@@ -55,13 +67,22 @@ def main():
                     num=sleep_time),
                     file=sys.stderr)
 
+                # TODO: COMMENT ADDED HERE
+                print('[{time}] INFO: Sleeping as cpu utilization is high'.format(
+                    time=str(datetime.datetime.now()).split('.')[0]),
+                    file=sys.stdout)
+
                 sleep(sleep_time)
                 continue
 
         except:
+            print('[{time}] INFO: Sleeping after catching exception of scanner getting killed'.format(
+                time=str(datetime.datetime.now()).split('.')[0]),
+                file=sys.stdout)
+
             # I've noticed that on laptops that Docker has a tendency to kill the scanner when the laptop sleeps; this
             # is designed to catch that exception
-            sleep(1)
+            # sleep(1)
             continue
 
         # Every so many scans, let's opportunistically clear out any PENDING scans that are older than 1800 seconds
@@ -84,6 +105,10 @@ def main():
 
             # Forcibly restart if things are going real bad, sleep for a bit to avoid flagging
             if num > SCANNER_ALLOW_KICKSTART_NUM_ABORTED and SCANNER_ALLOW_KICKSTART:
+                print('[{time}] INFO: Sleeping a bit as the scanner has restarted forcibly'.format(
+                    time=str(datetime.datetime.now()).split('.')[0]),
+                    file=sys.stdout)
+
                 sleep(10)
                 try:
                     print('[{time}] ERROR: Celery appears to be hung. Attempting to kickstart the scanners.'.format(
@@ -145,6 +170,12 @@ def main():
                 num=SCANNER_BROKER_RECONNECTION_SLEEP_TIME),
                 file=sys.stderr
             )
+
+            # TODO: COMMENT ADDED HERE
+            print('[{time}] INFO: Sleeping as unable to connect to redis'.format(
+                time=str(datetime.datetime.now()).split('.')[0]),
+                file=sys.stdout)
+
             sleep(SCANNER_BROKER_RECONNECTION_SLEEP_TIME)
             continue
 
@@ -157,6 +188,12 @@ def main():
                 num=SCANNER_DATABASE_RECONNECTION_SLEEP_TIME),
                 file=sys.stderr
             )
+
+            # TODO: COMMENT ADDED HERE
+            print('[{time}] INFO: Sleeping as unable to retrieve list of sites to scan'.format(
+                time=str(datetime.datetime.now()).split('.')[0]),
+                file=sys.stdout)
+
             sleep(SCANNER_DATABASE_RECONNECTION_SLEEP_TIME)
             continue
 
@@ -172,18 +209,63 @@ def main():
                 for site in sites_to_scan:
                     scan.delay(*site)
 
+                # TODO: COMMENT ADDED HERE
+                print('[{time}] INFO: Sleeping after picking sites from queue'.format(
+                    time=str(datetime.datetime.now()).split('.')[0]),
+                    file=sys.stdout)
+
                 # Always sleep at least some amount of time so that CPU utilization measurements can track
                 sleep(SCANNER_CYCLE_SLEEP_TIME / 2)
             else:  # If the queue was empty, lets sleep a little bit
-                sleep(SCANNER_CYCLE_SLEEP_TIME)
+                                # TODO: COMMENT ADDED HERE
+                print('[{time}] INFO: Sleeping as there are no sites in queue'.format(
+                    time=str(datetime.datetime.now()).split('.')[0]),
+                    file=sys.stdout)
+
+                return
+                # sleep(SCANNER_CYCLE_SLEEP_TIME)
+
         except KeyboardInterrupt:
             print('Exiting scanner backend')
             sys.exit(1)
-        except:  # this shouldn't trigger, but we don't want a scan breakage to kill the scanner
+        except Exception as e:  # this shouldn't trigger, but we don't want a scan breakage to kill the scanner
             print('[{time}] ERROR: Unknown celery error.'.format(
                 time=str(datetime.datetime.now()).split('.')[0]),
                 file=sys.stderr)
 
+            print('ERROR: {err}'.format(
+                err=e),
+                file=sys.stderr)
+
+
+# Register the application with flask
+app = Flask('http-observatory-scanner')
+app.config['PROPAGATE_EXCEPTIONS'] = API_PROPAGATE_EXCEPTIONS
+api = Blueprint('api', __name__)
+
+app.register_blueprint(api)
+
+
+@app.route('/', methods=['GET'])
+@app.route('/index', methods=['GET'])
+@add_response_headers(cors=True)
+def main():
+    return jsonify({
+        'status': 'success',
+        'text': 'Welcome to the HTTP Observatory Scanner!'
+    })
+
+
+@app.route('/init', methods=['GET'])
+@add_response_headers(cors=True)
+def api_post_scan_hostname():
+    init()
+
+    return jsonify({
+        'status': 'success',
+        'text': 'scanner initiated'
+    })
+
 
 if __name__ == '__main__':
-    main()
+    app.run(debug=DEVELOPMENT_MODE, port=API_PORT)

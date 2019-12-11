@@ -37,4 +37,6 @@ celery \
 worker
 
 # Run the scanner
-python3 -u httpobs/scanner/main.py >> /var/log/httpobs/scan-worker.log 2>&1
+# python3 -u httpobs/scanner/main.py >> /var/log/httpobs/scan-worker.log 2>&1
+
+uwsgi --http :8080 --wsgi-file httpobs/scanner/main.py --processes 2 --callable app --master
