@@ -51,8 +51,13 @@ def scan(hostname: str, site_id: int, scan_id: int):
 
     # catch the celery timeout, which will almost certainly occur in retrieve_all()
     except SoftTimeLimitExceeded:
+        print('celery time limit exceeded, aborting scan on {hostname}'.format(hostname=hostname), file=sys.stderr)
+
         update_scan_state(scan_id, STATE_ABORTED, error='site unresponsive')
     except (TimeLimitExceeded, WorkerLostError, WorkerShutdown, WorkerTerminate):
+        print('celery time limit exceeded or worker issues, scan failed for {hostname}'.format(hostname=hostname), file=sys.stderr)
+
+        update_scan_state(scan_id, STATE_ABORTED, error='scanner worker failed')
         raise
     # the database is down, oh no!
     except IOError:
@@ -63,6 +68,11 @@ def scan(hostname: str, site_id: int, scan_id: int):
 
         # If we are unsuccessful, close out the scan in the database
         update_scan_state(scan_id, STATE_FAILED, error=repr(e))
+
+        # Print the exception to stderr always
+        import traceback
+        print('Error detected in scan for : ' + hostname)
+        traceback.print_exc(file=sys.stderr)
 
         # Print the exception to stderr if we're in dev
         if DEVELOPMENT_MODE:

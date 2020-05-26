@@ -189,6 +189,12 @@ def periodic_maintenance() -> int:
                            AND start_time < NOW() - INTERVAL '%s seconds';""",
                     (STATE_ABORTED, STATE_ABORTED, STATE_FAILED, STATE_FINISHED, SCANNER_ABORT_SCAN_TIME))
 
+    print('WARNING: periodic_maintenance ran to update {count} rows as {state}'.format(
+        count=cur.rowcount,
+        state=STATE_ABORTED),
+        file=sys.stderr
+    )
+
     return cur.rowcount
 
 

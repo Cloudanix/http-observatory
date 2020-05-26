@@ -217,7 +217,7 @@ def init():
                 # Always sleep at least some amount of time so that CPU utilization measurements can track
                 sleep(SCANNER_CYCLE_SLEEP_TIME / 2)
             else:  # If the queue was empty, lets sleep a little bit
-                                # TODO: COMMENT ADDED HERE
+                # TODO: COMMENT ADDED HERE
                 print('[{time}] INFO: Sleeping as there are no sites in queue'.format(
                     time=str(datetime.datetime.now()).split('.')[0]),
                     file=sys.stdout)
@@ -229,13 +229,11 @@ def init():
             print('Exiting scanner backend')
             sys.exit(1)
         except Exception as e:  # this shouldn't trigger, but we don't want a scan breakage to kill the scanner
-            print('[{time}] ERROR: Unknown celery error.'.format(
-                time=str(datetime.datetime.now()).split('.')[0]),
-                file=sys.stderr)
-
-            print('ERROR: {err}'.format(
+            print('[{time}] ERROR: Unknown celery error {err}'.format(
+                time=str(datetime.datetime.now()).split('.')[0],
                 err=e),
-                file=sys.stderr)
+                file=sys.stderr
+            )
 
 
 # Register the application with flask
