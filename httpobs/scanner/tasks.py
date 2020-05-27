@@ -29,17 +29,38 @@ def scan(hostname: str, site_id: int, scan_id: int):
         # Once celery kicks off the task, let's update the scan state from PENDING to RUNNING
         update_scan_state(scan_id, STATE_RUNNING)
 
+        print('processing scan_id: {sc_id}, site_id: {st_id}, host: {hostname}'.format(
+            sc_id=scan_id,
+            st_id=site_id,
+            hostname=hostname),
+            file=sys.stderr
+        )
+
         # Get the site's cookies and headers
         headers = select_site_headers(hostname)
 
         # Attempt to retrieve all the resources
         reqs = retrieve_all(hostname, cookies=headers['cookies'], headers=headers['headers'])
 
+        print('retrieved all resources scan_id: {sc_id}, site_id: {st_id}, host: {hostname}'.format(
+            sc_id=scan_id,
+            st_id=site_id,
+            hostname=hostname),
+            file=sys.stderr
+        )
+
         # If we can't connect at all, let's abort the test
         if reqs['responses']['auto'] is None:
             update_scan_state(scan_id, STATE_FAILED, error='site down')
 
             return
+
+        print('inserting test results scan_id: {sc_id}, site_id: {st_id}, host: {hostname}'.format(
+            sc_id=scan_id,
+            st_id=site_id,
+            hostname=hostname),
+            file=sys.stderr
+        )
 
         # Execute each test, replacing the underscores in the function name with dashes in the test name
         # TODO: Get overridden expectations
