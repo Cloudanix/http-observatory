@@ -6,6 +6,7 @@ from httpobs.conf import DEVELOPMENT_MODE, API_PORT, API_PROPAGATE_EXCEPTIONS
 from httpobs.website import add_response_headers
 from httpobs.website.api import api
 from httpobs.website.monitoring import monitoring_api
+import needle_sdk
 
 
 def __exit_with(msg: str) -> None:
@@ -18,6 +19,7 @@ app = Flask('http-observatory')
 app.config['PROPAGATE_EXCEPTIONS'] = API_PROPAGATE_EXCEPTIONS
 app.register_blueprint(api)
 app.register_blueprint(monitoring_api)
+needle_sdk.start(flask_app=app)
 
 
 @app.route('/')
